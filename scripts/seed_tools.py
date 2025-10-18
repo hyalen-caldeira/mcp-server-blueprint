@@ -54,29 +54,29 @@ INITIAL_TOOLS = [
 
 async def seed_tools() -> None:
     """Seed initial tools into the database."""
-    async with async_session_factory() as session:
-        service = ToolService(session)
+    logger.info(f"Seeding {len(INITIAL_TOOLS)} tools...")
 
-        logger.info(f"Seeding {len(INITIAL_TOOLS)} tools...")
-
-        for tool_data in INITIAL_TOOLS:
+    for tool_data in INITIAL_TOOLS:
+        # Use a new session for each tool to avoid transaction issues
+        async with async_session_factory() as session:
+            service = ToolService(session)
             try:
                 # Check if tool already exists
-                try:
-                    existing_tool = await service.get_tool_by_name(tool_data.name)
-                    logger.info(f"Tool '{tool_data.name}' already exists (ID: {existing_tool.id})")
-                    continue
-                except Exception:  # nosec B110
-                    pass  # Tool doesn't exist, proceed with creation
+                existing_tool = await service.get_tool_by_name(tool_data.name)
+                logger.info(f"Tool '{tool_data.name}' already exists (ID: {existing_tool.id})")
+                continue
+            except Exception:  # nosec B110
+                # Tool doesn't exist, proceed with creation
+                pass
 
+            try:
                 # Create tool
                 tool = await service.create_tool(tool_data)
                 logger.info(f"Created tool: {tool.name} (ID: {tool.id})")
-
             except Exception as e:
                 logger.error(f"Failed to create tool '{tool_data.name}': {e}")
 
-        logger.info("Tool seeding complete!")
+    logger.info("Tool seeding complete!")
 
 
 async def main() -> None:

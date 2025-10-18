@@ -1,52 +1,56 @@
-"""MCP tools implementation with dynamic loading."""
+"""MCP tools implementation."""
 
 import logging
 from typing import Any
 
-from src.core.database import async_session_factory
-from src.core.services.tool_service import ToolService
+from src.core.services.tool_handlers import calculator_add_handler, echo_handler
 from src.mcp_server.server import mcp
 
 
 logger = logging.getLogger(__name__)
 
 
-async def load_and_register_tools() -> None:
-    """Load active tools from database and register them with MCP server."""
-    async with async_session_factory() as session:
-        service = ToolService(session)
-        tools = await service.list_tools(active_only=True)
-
-        logger.info(f"Loading {len(tools)} active tools from database")
-
-        for tool in tools:
-            register_tool(tool.name, tool.description, tool.parameters_schema)
-            logger.info(f"Registered tool: {tool.name}")
-
-
-def register_tool(name: str, description: str, parameters_schema: dict[str, Any]) -> None:  # noqa: ARG001
-    """Register a tool with the MCP server.
+@mcp.tool(name="echo", description="Echo back the provided text")  # type: ignore[misc]
+async def echo(text: str) -> dict[str, Any]:
+    """Echo back the provided text.
 
     Args:
-        name: Tool name
-        description: Tool description
-        parameters_schema: JSON schema for parameters (used by FastMCP internally)
+        text: The text to echo back
+
+    Returns:
+        Dictionary with success status and echoed message
     """
+    try:
+        result = echo_handler({"text": text})
+        return result
+    except Exception as e:
+        logger.error(f"Echo tool failed: {e}")
+        return {"success": False, "error": str(e)}
 
-    @mcp.tool(name=name, description=description)  # type: ignore[misc]
-    async def dynamic_tool(**kwargs: Any) -> dict[str, Any]:
-        """Dynamically created tool that executes via service layer."""
-        async with async_session_factory() as session:
-            service = ToolService(session)
-            try:
-                result = await service.execute_tool(name, kwargs)
-                return result
-            except Exception as e:
-                logger.error(f"Tool '{name}' execution failed: {e}")
-                return {
-                    "success": False,
-                    "error": str(e),
-                }
 
-    # Set the function name for better debugging
-    dynamic_tool.__name__ = name
+@mcp.tool(name="calculator_add", description="Add two numbers together")  # type: ignore[misc]
+async def calculator_add(a: float, b: float) -> dict[str, Any]:
+    """Add two numbers together.
+
+    Args:
+        a: First number
+        b: Second number
+
+    Returns:
+        Dictionary with success status and result
+    """
+    try:
+        result = calculator_add_handler({"a": a, "b": b})
+        return result
+    except Exception as e:
+        logger.error(f"Calculator add tool failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def load_and_register_tools() -> None:
+    """Verify tools are available.
+
+    Note: Tools are statically registered above with @mcp.tool decorators.
+    This function logs the available tools.
+    """
+    logger.info("MCP tools registered: echo, calculator_add")
